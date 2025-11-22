@@ -1,6 +1,6 @@
-def main():
-    print("Hello from reversi-backend!")
+"""FastAPI application entry point"""
 
+import uvicorn
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run("reversi_backend.app:app", host="0.0.0.0", port=8000, reload=True)
