@@ -7,6 +7,10 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
 - High-performance game logic powered by **[rust-reversi](https://github.com/neodymium6/rust_reversi)** library
 - RESTful API with FastAPI
 - In-memory game session management
+- AI player support with multiple difficulty levels
+  - Random move player
+  - Alpha-beta search with configurable depth
+  - Extensible architecture for custom AI players
 - Automatic pass handling (when a player has no legal moves)
 - Game over detection with winner calculation
 - CORS support for frontend integration
@@ -67,8 +71,18 @@ Once the server is running, you can access:
 
 #### Create New Game
 - **POST** `/api/game/new`
+- **Request Body** (optional): `CreateGameRequest`
+  ```json
+  {
+    "aiPlayer": {
+      "aiPlayerId": "piece_depth3",
+      "aiColor": 2  // 1=Black, 2=White
+    }
+  }
+  ```
 - **Response**: `GameStateResponse`
 - Creates a new game session and returns initial game state
+- Optionally specify an AI player to play against
 
 #### Make Move
 - **POST** `/api/game/move`
@@ -90,6 +104,45 @@ Once the server is running, you can access:
 - **GET** `/api/game/{game_id}`
 - **Response**: `GameStateResponse`
 - Retrieves current state of an existing game
+
+#### Delete Game
+- **DELETE** `/api/game/{game_id}`
+- **Response**: Success message
+- Deletes a game and cleans up associated resources (including AI processes)
+- Returns 404 if game not found
+
+### AI Player Management
+
+#### Get Available AI Players
+- **GET** `/api/ai/players`
+- **Response**: List of available AI players
+  ```json
+  [
+    {
+      "id": "random",
+      "name": "Random Player",
+      "description": "Randomly selects legal moves"
+    },
+    {
+      "id": "piece_depth3",
+      "name": "Piece Counter (Depth 3)",
+      "description": "Alpha-beta search with piece counting evaluation (depth 3)"
+    }
+  ]
+  ```
+
+#### Make AI Move
+- **POST** `/api/game/ai-move`
+- **Request Body**: `AIMoveRequest`
+  ```json
+  {
+    "gameId": "uuid-string"
+  }
+  ```
+- **Response**: `GameStateResponse`
+- Instructs the AI player to make a move for the current game
+- Returns the updated game state after AI's move
+- Fails if no AI is configured for the game or if it's not AI's turn
 
 ### Response Models
 
@@ -123,9 +176,16 @@ reversi-backend/
 │   ├── config.py        # Configuration and settings
 │   ├── models.py        # Pydantic models for request/response
 │   ├── routes.py        # API route handlers
-│   └── game_manager.py  # Game session management logic
+│   ├── game_manager.py  # Game session management logic
+│   ├── ai_config.py     # AI player configuration
+│   ├── ai_manager.py    # AI process management
+│   └── ai_players/      # AI player implementations
+│       ├── __init__.py
+│       ├── random_player.py
+│       └── piece_player.py
 ├── tests/
-│   └── test_integration.py  # Integration tests
+│   ├── test_integration.py     # Integration tests
+│   └── test_ai_integration.py  # AI integration tests
 ├── main.py              # Application entry point
 ├── pyproject.toml       # Project metadata and dependencies
 ├── .env.example         # Example environment variables
@@ -176,6 +236,35 @@ When a player has no legal moves:
 1. The backend automatically executes a pass
 2. The `passed` flag is set to `true` in the response
 3. If both players pass consecutively, the game ends
+
+## AI Players
+
+The backend supports AI players that run as separate processes. AI players communicate via stdin/stdout using the protocol defined by [rust-reversi](https://github.com/neodymium6/rust_reversi).
+
+### Available AI Players
+
+By default, the following AI players are available:
+
+- **random** - Randomly selects from legal moves
+- **piece_depth3** - Alpha-beta search with piece counting (depth 3)
+- **piece_depth5** - Alpha-beta search with piece counting (depth 5)
+
+### Adding Custom AI Players
+
+To add a custom AI player, register it in `reversi_backend/ai_config.py`:
+
+```python
+AIPlayerConfig(
+    id="my_custom_ai",
+    name="My Custom AI",
+    command=[sys.executable, str(AI_PLAYERS_DIR / "my_ai.py"), "arg1"],
+    description="Description of your AI player"
+)
+```
+
+Note: `sys.executable` ensures the same Python interpreter is used, and `AI_PLAYERS_DIR` provides the absolute path to the ai_players directory.
+
+For implementation details and player protocol, see the [rust-reversi documentation](https://github.com/neodymium6/rust_reversi#creating-ai-players).
 
 ## Environment Variables
 

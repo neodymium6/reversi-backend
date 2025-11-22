@@ -45,3 +45,22 @@ class MakeMoveRequest(BaseModel):
 
     gameId: str
     position: Position
+
+
+class AIPlayerSettings(BaseModel):
+    """AI player settings for a game"""
+
+    aiPlayerId: str
+    aiColor: CellState  # BLACK or WHITE
+
+
+class CreateGameRequest(BaseModel):
+    """Request to create a new game"""
+
+    aiPlayer: AIPlayerSettings | None = None
+
+
+class AIMoveRequest(BaseModel):
+    """Request for AI to make a move"""
+
+    gameId: str

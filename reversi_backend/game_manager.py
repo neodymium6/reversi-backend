@@ -5,7 +5,15 @@ import uuid
 
 from rust_reversi import Board, Color, Turn
 
-from reversi_backend.models import CellState, GameStateResponse, Position, Score
+from reversi_backend.ai_config import get_ai_player
+from reversi_backend.ai_manager import AIPlayerProcess
+from reversi_backend.models import (
+    AIPlayerSettings,
+    CellState,
+    GameStateResponse,
+    Position,
+    Score,
+)
 
 BOARD_SIZE = 8
 
@@ -17,9 +25,16 @@ class GameManager:
 
     def __init__(self):
         self.games: dict[str, tuple[Board, Turn]] = {}
+        self.ai_processes: dict[str, AIPlayerProcess] = {}
 
-    def create_game(self) -> GameStateResponse:
-        """Create a new game and return initial state"""
+    def create_game(
+        self, ai_player: AIPlayerSettings | None = None
+    ) -> GameStateResponse:
+        """Create a new game and return initial state
+
+        Args:
+            ai_player: Optional AI player settings
+        """
         game_id = str(uuid.uuid4())
         board = Board()
         current_player = Turn.BLACK
@@ -27,7 +42,21 @@ class GameManager:
         # Store game state
         self.games[game_id] = (board, current_player)
 
-        logger.info(f"Created new game: {game_id}")
+        # Initialize AI player if requested
+        if ai_player:
+            ai_config = get_ai_player(ai_player.aiPlayerId)
+            if not ai_config:
+                raise ValueError(f"AI player not found: {ai_player.aiPlayerId}")
+
+            ai_process = AIPlayerProcess(ai_config, ai_player.aiColor)
+            self.ai_processes[game_id] = ai_process
+            logger.info(
+                f"Created new game: {game_id} with AI player: {ai_config.name} "
+                f"as {'BLACK' if ai_player.aiColor == CellState.BLACK else 'WHITE'}"
+            )
+        else:
+            logger.info(f"Created new game: {game_id}")
+
         return self._build_response(game_id, board, current_player)
 
     def make_move(self, game_id: str, position: Position) -> GameStateResponse:
@@ -86,6 +115,50 @@ class GameManager:
 
         board, current_player = self.games[game_id]
         return self._build_response(game_id, board, current_player)
+
+    def make_ai_move(self, game_id: str) -> GameStateResponse:
+        """Let AI make a move and return updated state"""
+        if game_id not in self.games:
+            logger.warning(f"Attempted AI move on non-existent game: {game_id}")
+            raise ValueError(f"Game {game_id} not found")
+
+        if game_id not in self.ai_processes:
+            raise ValueError(f"No AI player configured for game {game_id}")
+
+        board, current_player = self.games[game_id]
+        ai_process = self.ai_processes[game_id]
+
+        # Check if it's AI's turn
+        current_player_int = (
+            CellState.BLACK if current_player == Turn.BLACK else CellState.WHITE
+        )
+        if current_player_int != ai_process.color:
+            raise ValueError(
+                f"Not AI's turn. Current player: {current_player_int}, "
+                f"AI color: {ai_process.color}"
+            )
+
+        # Get AI move
+        move = ai_process.get_move(board)
+        logger.info(f"AI player selected move: {move}")
+
+        # Convert to Position and execute move
+        position = Position(row=move // BOARD_SIZE, col=move % BOARD_SIZE)
+        return self.make_move(game_id, position)
+
+    def delete_game(self, game_id: str) -> None:
+        """Delete a game and cleanup associated resources"""
+        if game_id not in self.games:
+            logger.warning(f"Attempted delete on non-existent game: {game_id}")
+            raise ValueError(f"Game {game_id} not found")
+
+        # Remove AI process if exists (will trigger __del__ cleanup)
+        if game_id in self.ai_processes:
+            del self.ai_processes[game_id]
+
+        # Remove game state
+        del self.games[game_id]
+        logger.info(f"Deleted game: {game_id}")
 
     def _build_response(
         self, game_id: str, board: Board, current_player: Turn, passed: bool = False
