@@ -7,6 +7,7 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
 - High-performance game logic powered by **[rust-reversi](https://github.com/neodymium6/rust_reversi)** library
 - RESTful API with FastAPI
 - In-memory game session management
+- **Automatic garbage collection** - inactive games are automatically cleaned up
 - AI player support with multiple difficulty levels
   - Random move player
   - Alpha-beta search with configurable depth
@@ -266,11 +267,38 @@ Note: `sys.executable` ensures the same Python interpreter is used, and `AI_PLAY
 
 For implementation details and player protocol, see the [rust-reversi documentation](https://github.com/neodymium6/rust_reversi#creating-ai-players).
 
+## Garbage Collection
+
+The backend automatically cleans up inactive game sessions to prevent memory leaks:
+
+- **Automatic cleanup**: Games that haven't been accessed for a specified timeout are automatically deleted
+- **Periodic checks**: A background task runs at regular intervals to check for inactive games
+- **Resource cleanup**: When a game is deleted, all associated resources (including AI processes) are properly cleaned up
+
+### Configuration
+
+You can configure the garbage collection behavior via environment variables:
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `GAME_TIMEOUT_SECONDS` | Time in seconds before inactive games are deleted | 3600 (1 hour) | 7200 |
+| `GC_INTERVAL_SECONDS` | Interval in seconds between GC runs | 600 (10 minutes) | 300 |
+
+**What counts as "access"?**
+- Creating a new game
+- Making a move
+- Getting game state
+- Making an AI move
+
+Games are **not** deleted if they've been accessed within the timeout period, even if they're completed.
+
 ## Environment Variables
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `FRONTEND_ORIGINS` | List of allowed CORS origins | No | `[]` |
+| `GAME_TIMEOUT_SECONDS` | Time before inactive games are deleted (seconds) | No | `3600` |
+| `GC_INTERVAL_SECONDS` | Interval between garbage collection runs (seconds) | No | `600` |
 
 ## Production Deployment
 

@@ -1,7 +1,9 @@
 """Game session management using rust-reversi"""
 
 import logging
+import time
 import uuid
+from functools import wraps
 
 from rust_reversi import Board, Color, Turn
 
@@ -20,12 +22,28 @@ BOARD_SIZE = 8
 logger = logging.getLogger(__name__)
 
 
+def update_access_time(func):
+    """Decorator to update last access time for a game"""
+
+    @wraps(func)
+    def wrapper(self, game_id: str, *args, **kwargs):
+        result = func(self, game_id, *args, **kwargs)
+        # Update access time after successful execution
+        if game_id in self.games:
+            self.last_access[game_id] = time.time()
+        return result
+
+    return wrapper
+
+
 class GameManager:
     """Manages game sessions with in-memory storage"""
 
     def __init__(self):
         self.games: dict[str, tuple[Board, Turn]] = {}
         self.ai_processes: dict[str, AIPlayerProcess] = {}
+        # Track last access time for each game (for garbage collection)
+        self.last_access: dict[str, float] = {}
 
     def create_game(
         self, ai_player: AIPlayerSettings | None = None
@@ -57,8 +75,12 @@ class GameManager:
         else:
             logger.info(f"Created new game: {game_id}")
 
+        # Set initial access time
+        self.last_access[game_id] = time.time()
+
         return self._build_response(game_id, board, current_player)
 
+    @update_access_time
     def make_move(self, game_id: str, position: Position) -> GameStateResponse:
         """Execute a move and return updated state"""
         if game_id not in self.games:
@@ -107,6 +129,7 @@ class GameManager:
         )
         return self._build_response(game_id, board, new_player, passed)
 
+    @update_access_time
     def get_game_state(self, game_id: str) -> GameStateResponse:
         """Get current game state"""
         if game_id not in self.games:
@@ -116,6 +139,7 @@ class GameManager:
         board, current_player = self.games[game_id]
         return self._build_response(game_id, board, current_player)
 
+    @update_access_time
     def make_ai_move(self, game_id: str) -> GameStateResponse:
         """Let AI make a move and return updated state"""
         if game_id not in self.games:
@@ -158,7 +182,41 @@ class GameManager:
 
         # Remove game state
         del self.games[game_id]
+
+        # Remove last access time
+        if game_id in self.last_access:
+            del self.last_access[game_id]
+
         logger.info(f"Deleted game: {game_id}")
+
+    def collect_garbage(self, timeout_seconds: int) -> int:
+        """Remove inactive games that haven't been accessed for timeout_seconds
+
+        Args:
+            timeout_seconds: Time in seconds after which inactive games are deleted
+
+        Returns:
+            Number of games deleted
+        """
+        current_time = time.time()
+        games_to_delete = []
+
+        for game_id, last_access_time in self.last_access.items():
+            if current_time - last_access_time > timeout_seconds:
+                games_to_delete.append(game_id)
+
+        # Delete expired games
+        for game_id in games_to_delete:
+            try:
+                self.delete_game(game_id)
+            except ValueError:
+                # Game already deleted, skip
+                logger.warning(f"Game {game_id} already deleted during GC")
+
+        if games_to_delete:
+            logger.info(f"Garbage collection: deleted {len(games_to_delete)} games")
+
+        return len(games_to_delete)
 
     def _build_response(
         self, game_id: str, board: Board, current_player: Turn, passed: bool = False

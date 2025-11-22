@@ -7,6 +7,12 @@ class Settings(BaseSettings):
     # Default to localhost for development, but can be overridden by env var
     FRONTEND_ORIGINS: list[str] = []
 
+    # Garbage collection settings
+    # Time in seconds after which inactive games are deleted (default: 1 hour)
+    GAME_TIMEOUT_SECONDS: int = 3600
+    # Interval in seconds between garbage collection runs (default: 10 minutes)
+    GC_INTERVAL_SECONDS: int = 600
+
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(env_file=".env")
 
 
