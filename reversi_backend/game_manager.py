@@ -48,6 +48,23 @@ class GameManager:
 
         board.do_move(pos)
 
+        # Check if next player needs to pass
+        passed = False
+        legal_moves = board.get_legal_moves_vec()
+
+        if len(legal_moves) == 0 and not board.is_game_over():
+            # Next player has no legal moves - must pass
+            logger.info("Auto-pass: next player has no legal moves")
+            board.do_pass()
+            passed = True
+
+            # After pass, check for double pass (game over)
+            # If both players passed consecutively, game is over
+            legal_moves_after_pass = board.get_legal_moves_vec()
+            if len(legal_moves_after_pass) == 0:
+                logger.info("Double pass detected - game over")
+                # Game will be marked as over by is_game_over()
+
         # Update current player (rust-reversi handles turn switching internally)
         # Get the new current player from the board
         new_player = board.get_board()[2]  # (player_board, opponent_board, turn)
@@ -56,9 +73,10 @@ class GameManager:
         self.games[game_id] = (board, new_player)
 
         logger.info(
-            f"Move executed: game={game_id}, pos={position}, next_player={new_player}"
+            f"Move executed: game={game_id}, pos={position}, "
+            f"next_player={new_player}, passed={passed}"
         )
-        return self._build_response(game_id, board, new_player)
+        return self._build_response(game_id, board, new_player, passed)
 
     def get_game_state(self, game_id: str) -> GameStateResponse:
         """Get current game state"""
@@ -70,7 +88,7 @@ class GameManager:
         return self._build_response(game_id, board, current_player)
 
     def _build_response(
-        self, game_id: str, board: Board, current_player: Turn
+        self, game_id: str, board: Board, current_player: Turn, passed: bool = False
     ) -> GameStateResponse:
         """Build GameStateResponse from Board object"""
         # Get board state as vector (returns Color objects for each cell)
@@ -126,6 +144,7 @@ class GameManager:
             legalMoves=legal_moves,
             gameOver=game_over,
             winner=winner,
+            passed=passed,
         )
 
 

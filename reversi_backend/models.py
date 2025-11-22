@@ -37,6 +37,7 @@ class GameStateResponse(BaseModel):
     legalMoves: list[Position]
     gameOver: bool
     winner: CellState | None = None  # BLACK, WHITE, or None
+    passed: bool = False  # True if the previous player had to pass
 
 
 class MakeMoveRequest(BaseModel):
