@@ -3,6 +3,7 @@
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from functools import wraps
 
 from rust_reversi import Board, Color, Turn
@@ -22,6 +23,20 @@ BOARD_SIZE = 8
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class GameSession:
+    """Represents a single game session with all associated data"""
+
+    board: Board
+    last_access: float
+    ai_process: AIPlayerProcess | None = None
+
+    @property
+    def current_player(self) -> Turn:
+        """Get current player from board state"""
+        return self.board.get_board()[2]
+
+
 def update_access_time(func):
     """Decorator to update last access time for a game"""
 
@@ -29,8 +44,8 @@ def update_access_time(func):
     def wrapper(self, game_id: str, *args, **kwargs):
         result = func(self, game_id, *args, **kwargs)
         # Update access time after successful execution
-        if game_id in self.games:
-            self.last_access[game_id] = time.time()
+        if game_id in self.sessions:
+            self.sessions[game_id].last_access = time.time()
         return result
 
     return wrapper
@@ -40,10 +55,7 @@ class GameManager:
     """Manages game sessions with in-memory storage"""
 
     def __init__(self):
-        self.games: dict[str, tuple[Board, Turn]] = {}
-        self.ai_processes: dict[str, AIPlayerProcess] = {}
-        # Track last access time for each game (for garbage collection)
-        self.last_access: dict[str, float] = {}
+        self.sessions: dict[str, GameSession] = {}
 
     def create_game(
         self, ai_player: AIPlayerSettings | None = None
@@ -55,19 +67,15 @@ class GameManager:
         """
         game_id = str(uuid.uuid4())
         board = Board()
-        current_player = Turn.BLACK
-
-        # Store game state
-        self.games[game_id] = (board, current_player)
 
         # Initialize AI player if requested
+        ai_process = None
         if ai_player:
             ai_config = get_ai_player(ai_player.aiPlayerId)
             if not ai_config:
                 raise ValueError(f"AI player not found: {ai_player.aiPlayerId}")
 
             ai_process = AIPlayerProcess(ai_config, ai_player.aiColor)
-            self.ai_processes[game_id] = ai_process
             logger.info(
                 f"Created new game: {game_id} with AI player: {ai_config.name} "
                 f"as {'BLACK' if ai_player.aiColor == CellState.BLACK else 'WHITE'}"
@@ -75,95 +83,90 @@ class GameManager:
         else:
             logger.info(f"Created new game: {game_id}")
 
-        # Set initial access time
-        self.last_access[game_id] = time.time()
+        # Create and store game session
+        session = GameSession(
+            board=board, last_access=time.time(), ai_process=ai_process
+        )
+        self.sessions[game_id] = session
 
-        return self._build_response(game_id, board, current_player)
+        return self._build_response(game_id, session)
 
     @update_access_time
     def make_move(self, game_id: str, position: Position) -> GameStateResponse:
         """Execute a move and return updated state"""
-        if game_id not in self.games:
+        if game_id not in self.sessions:
             logger.warning(f"Attempted move on non-existent game: {game_id}")
             raise ValueError(f"Game {game_id} not found")
 
-        board, _current_player = self.games[game_id]
+        session = self.sessions[game_id]
 
         # Convert position to rust-reversi format (0-63)
         pos = position.row * BOARD_SIZE + position.col
 
         # Validate and execute move
-        if not board.is_legal_move(pos):
+        if not session.board.is_legal_move(pos):
             logger.warning(f"Illegal move attempt: game={game_id}, pos={position}")
             raise ValueError(f"Illegal move at row={position.row}, col={position.col}")
 
-        board.do_move(pos)
+        session.board.do_move(pos)
 
         # Check if next player needs to pass
         passed = False
-        legal_moves = board.get_legal_moves_vec()
+        legal_moves = session.board.get_legal_moves_vec()
 
-        if len(legal_moves) == 0 and not board.is_game_over():
+        if len(legal_moves) == 0 and not session.board.is_game_over():
             # Next player has no legal moves - must pass
             logger.info("Auto-pass: next player has no legal moves")
-            board.do_pass()
+            session.board.do_pass()
             passed = True
 
             # After pass, check for double pass (game over)
             # If both players passed consecutively, game is over
-            legal_moves_after_pass = board.get_legal_moves_vec()
+            legal_moves_after_pass = session.board.get_legal_moves_vec()
             if len(legal_moves_after_pass) == 0:
                 logger.info("Double pass detected - game over")
                 # Game will be marked as over by is_game_over()
 
-        # Update current player (rust-reversi handles turn switching internally)
-        # Get the new current player from the board
-        new_player = board.get_board()[2]  # (player_board, opponent_board, turn)
-
-        # Update stored state
-        self.games[game_id] = (board, new_player)
-
         logger.info(
             f"Move executed: game={game_id}, pos={position}, "
-            f"next_player={new_player}, passed={passed}"
+            f"next_player={session.current_player}, passed={passed}"
         )
-        return self._build_response(game_id, board, new_player, passed)
+        return self._build_response(game_id, session, passed)
 
     @update_access_time
     def get_game_state(self, game_id: str) -> GameStateResponse:
         """Get current game state"""
-        if game_id not in self.games:
+        if game_id not in self.sessions:
             logger.warning(f"Attempted get_state on non-existent game: {game_id}")
             raise ValueError(f"Game {game_id} not found")
 
-        board, current_player = self.games[game_id]
-        return self._build_response(game_id, board, current_player)
+        session = self.sessions[game_id]
+        return self._build_response(game_id, session)
 
     @update_access_time
     def make_ai_move(self, game_id: str) -> GameStateResponse:
         """Let AI make a move and return updated state"""
-        if game_id not in self.games:
+        if game_id not in self.sessions:
             logger.warning(f"Attempted AI move on non-existent game: {game_id}")
             raise ValueError(f"Game {game_id} not found")
 
-        if game_id not in self.ai_processes:
-            raise ValueError(f"No AI player configured for game {game_id}")
+        session = self.sessions[game_id]
 
-        board, current_player = self.games[game_id]
-        ai_process = self.ai_processes[game_id]
+        if session.ai_process is None:
+            raise ValueError(f"No AI player configured for game {game_id}")
 
         # Check if it's AI's turn
         current_player_int = (
-            CellState.BLACK if current_player == Turn.BLACK else CellState.WHITE
+            CellState.BLACK if session.current_player == Turn.BLACK else CellState.WHITE
         )
-        if current_player_int != ai_process.color:
+        if current_player_int != session.ai_process.color:
             raise ValueError(
                 f"Not AI's turn. Current player: {current_player_int}, "
-                f"AI color: {ai_process.color}"
+                f"AI color: {session.ai_process.color}"
             )
 
         # Get AI move
-        move = ai_process.get_move(board)
+        move = session.ai_process.get_move(session.board)
         logger.info(f"AI player selected move: {move}")
 
         # Convert to Position and execute move
@@ -172,20 +175,12 @@ class GameManager:
 
     def delete_game(self, game_id: str) -> None:
         """Delete a game and cleanup associated resources"""
-        if game_id not in self.games:
+        if game_id not in self.sessions:
             logger.warning(f"Attempted delete on non-existent game: {game_id}")
             raise ValueError(f"Game {game_id} not found")
 
-        # Remove AI process if exists (will trigger __del__ cleanup)
-        if game_id in self.ai_processes:
-            del self.ai_processes[game_id]
-
-        # Remove game state
-        del self.games[game_id]
-
-        # Remove last access time
-        if game_id in self.last_access:
-            del self.last_access[game_id]
+        # Remove session (AI process cleanup handled by __del__)
+        del self.sessions[game_id]
 
         logger.info(f"Deleted game: {game_id}")
 
@@ -201,8 +196,8 @@ class GameManager:
         current_time = time.time()
         games_to_delete = []
 
-        for game_id, last_access_time in self.last_access.items():
-            if current_time - last_access_time > timeout_seconds:
+        for game_id, session in self.sessions.items():
+            if current_time - session.last_access > timeout_seconds:
                 games_to_delete.append(game_id)
 
         # Delete expired games
@@ -219,11 +214,11 @@ class GameManager:
         return len(games_to_delete)
 
     def _build_response(
-        self, game_id: str, board: Board, current_player: Turn, passed: bool = False
+        self, game_id: str, session: GameSession, passed: bool = False
     ) -> GameStateResponse:
-        """Build GameStateResponse from Board object"""
+        """Build GameStateResponse from GameSession object"""
         # Get board state as vector (returns Color objects for each cell)
-        board_vec = board.get_board_vec_turn()
+        board_vec = session.board.get_board_vec_turn()
 
         # Convert to 8x8 matrix
         board_2d: list[list[CellState]] = []
@@ -242,29 +237,29 @@ class GameManager:
             board_2d.append(board_row)
 
         # Get legal moves
-        legal_moves_pos = board.get_legal_moves_vec()
+        legal_moves_pos = session.board.get_legal_moves_vec()
         legal_moves = [
             Position(row=pos // BOARD_SIZE, col=pos % BOARD_SIZE)
             for pos in legal_moves_pos
         ]
 
         # Get scores
-        black_score = board.black_piece_num()
-        white_score = board.white_piece_num()
+        black_score = session.board.black_piece_num()
+        white_score = session.board.white_piece_num()
 
         # Check game over
-        game_over = board.is_game_over()
+        game_over = session.board.is_game_over()
         winner = None
         if game_over:
-            if board.is_black_win():
+            if session.board.is_black_win():
                 winner = CellState.BLACK
-            elif board.is_white_win():
+            elif session.board.is_white_win():
                 winner = CellState.WHITE
             # else: draw (winner remains None)
 
         # Determine current player (1=Black, 2=White)
         current_player_int = (
-            CellState.BLACK if current_player == Turn.BLACK else CellState.WHITE
+            CellState.BLACK if session.current_player == Turn.BLACK else CellState.WHITE
         )
 
         return GameStateResponse(

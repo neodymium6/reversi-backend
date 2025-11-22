@@ -19,23 +19,19 @@ def test_garbage_collection():
     game_id2 = state2.gameId
 
     # Verify both games exist
-    assert game_id1 in manager.games
-    assert game_id2 in manager.games
-    assert game_id1 in manager.last_access
-    assert game_id2 in manager.last_access
+    assert game_id1 in manager.sessions
+    assert game_id2 in manager.sessions
 
     # Manually set first game's last access time to be old (2 seconds ago)
-    manager.last_access[game_id1] = time.time() - 2
+    manager.sessions[game_id1].last_access = time.time() - 2
 
     # Run garbage collection with 1 second timeout
     deleted = manager.collect_garbage(timeout_seconds=1)
 
     # First game should be deleted, second should remain
     assert deleted == 1
-    assert game_id1 not in manager.games
-    assert game_id2 in manager.games
-    assert game_id1 not in manager.last_access
-    assert game_id2 in manager.last_access
+    assert game_id1 not in manager.sessions
+    assert game_id2 in manager.sessions
 
 
 def test_garbage_collection_no_timeout():
@@ -51,7 +47,7 @@ def test_garbage_collection_no_timeout():
 
     # No games should be deleted
     assert deleted == 0
-    assert game_id in manager.games
+    assert game_id in manager.sessions
 
 
 def test_access_updates_last_access_time():
@@ -63,7 +59,7 @@ def test_access_updates_last_access_time():
     game_id = state.gameId
 
     # Get initial access time
-    initial_time = manager.last_access[game_id]
+    initial_time = manager.sessions[game_id].last_access
 
     # Wait a bit
     time.sleep(0.1)
@@ -72,7 +68,7 @@ def test_access_updates_last_access_time():
     manager.get_game_state(game_id)
 
     # Last access time should be updated
-    assert manager.last_access[game_id] > initial_time
+    assert manager.sessions[game_id].last_access > initial_time
 
 
 def test_garbage_collection_with_ai():
@@ -87,16 +83,14 @@ def test_garbage_collection_with_ai():
     game_id = state.gameId
 
     # Verify AI process exists
-    assert game_id in manager.ai_processes
+    assert manager.sessions[game_id].ai_process is not None
 
     # Set last access time to old
-    manager.last_access[game_id] = time.time() - 2
+    manager.sessions[game_id].last_access = time.time() - 2
 
     # Run garbage collection
     deleted = manager.collect_garbage(timeout_seconds=1)
 
     # Game and AI process should be deleted
     assert deleted == 1
-    assert game_id not in manager.games
-    assert game_id not in manager.ai_processes
-    assert game_id not in manager.last_access
+    assert game_id not in manager.sessions
