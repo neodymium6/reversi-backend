@@ -23,6 +23,38 @@ BOARD_SIZE = 8
 logger = logging.getLogger(__name__)
 
 
+# Helper functions for type conversions
+def color_to_cell_state(color: Color) -> CellState:
+    """Convert rust-reversi Color to CellState"""
+    match color:
+        case Color.EMPTY:
+            return CellState.EMPTY
+        case Color.BLACK:
+            return CellState.BLACK
+        case Color.WHITE:
+            return CellState.WHITE
+
+
+def turn_to_cell_state(turn: Turn) -> CellState:
+    """Convert rust-reversi Turn to CellState"""
+    match turn:
+        case Turn.BLACK:
+            return CellState.BLACK
+        case Turn.WHITE:
+            return CellState.WHITE
+
+
+# Helper functions for position conversions
+def position_to_index(position: Position) -> int:
+    """Convert Position (row, col) to board index (0-63)"""
+    return position.row * BOARD_SIZE + position.col
+
+
+def index_to_position(index: int) -> Position:
+    """Convert board index (0-63) to Position (row, col)"""
+    return Position(row=index // BOARD_SIZE, col=index % BOARD_SIZE)
+
+
 @dataclass
 class GameSession:
     """Represents a single game session with all associated data"""
@@ -101,7 +133,7 @@ class GameManager:
         session = self.sessions[game_id]
 
         # Convert position to rust-reversi format (0-63)
-        pos = position.row * BOARD_SIZE + position.col
+        pos = position_to_index(position)
 
         # Validate and execute move
         if not session.board.is_legal_move(pos):
@@ -156,9 +188,7 @@ class GameManager:
             raise ValueError(f"No AI player configured for game {game_id}")
 
         # Check if it's AI's turn
-        current_player_int = (
-            CellState.BLACK if session.current_player == Turn.BLACK else CellState.WHITE
-        )
+        current_player_int = turn_to_cell_state(session.current_player)
         if current_player_int != session.ai_process.color:
             raise ValueError(
                 f"Not AI's turn. Current player: {current_player_int}, "
@@ -170,7 +200,7 @@ class GameManager:
         logger.info(f"AI player selected move: {move}")
 
         # Convert to Position and execute move
-        position = Position(row=move // BOARD_SIZE, col=move % BOARD_SIZE)
+        position = index_to_position(move)
         return self.make_move(game_id, position)
 
     def delete_game(self, game_id: str) -> None:
@@ -227,21 +257,12 @@ class GameManager:
             for col in range(BOARD_SIZE):
                 idx = row * BOARD_SIZE + col
                 cell = board_vec[idx]
-                # Convert Color enum to CellState
-                if cell == Color.EMPTY:
-                    board_row.append(CellState.EMPTY)
-                elif cell == Color.BLACK:
-                    board_row.append(CellState.BLACK)
-                else:  # Color.WHITE
-                    board_row.append(CellState.WHITE)
+                board_row.append(color_to_cell_state(cell))
             board_2d.append(board_row)
 
         # Get legal moves
         legal_moves_pos = session.board.get_legal_moves_vec()
-        legal_moves = [
-            Position(row=pos // BOARD_SIZE, col=pos % BOARD_SIZE)
-            for pos in legal_moves_pos
-        ]
+        legal_moves = [index_to_position(pos) for pos in legal_moves_pos]
 
         # Get scores
         black_score = session.board.black_piece_num()
@@ -258,9 +279,7 @@ class GameManager:
             # else: draw (winner remains None)
 
         # Determine current player (1=Black, 2=White)
-        current_player_int = (
-            CellState.BLACK if session.current_player == Turn.BLACK else CellState.WHITE
-        )
+        current_player_int = turn_to_cell_state(session.current_player)
 
         return GameStateResponse(
             gameId=game_id,
