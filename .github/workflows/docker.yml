@@ -2,9 +2,7 @@ name: Docker Build and Push
 
 on:
   push:
-    branches:
-      - main
-      - add-docker-support  # TODO: Remove before merge - for testing only
+    branches: [ main ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
@@ -42,7 +40,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
