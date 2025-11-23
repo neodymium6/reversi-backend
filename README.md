@@ -27,7 +27,14 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
 
 ## Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10 or higher (not required if using Docker)
+- Docker (optional, for containerized deployment)
+
+## Docker
+
+Pre-built Docker images are available at [ghcr.io/neodymium6/reversi-backend](https://github.com/neodymium6/reversi-backend/pkgs/container/reversi-backend).
+
+For Docker Compose examples and usage instructions, see the [examples/](examples/) directory.
 
 ## Setup
 
