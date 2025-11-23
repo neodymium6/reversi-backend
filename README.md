@@ -296,6 +296,9 @@ Games are **not** deleted if they've been accessed within the timeout period, ev
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
+| `HOST` | Server host address | Yes | N/A |
+| `PORT` | Server port | Yes | N/A |
+| `RELOAD` | Enable auto-reload on code changes | No | `false` |
 | `FRONTEND_ORIGINS` | List of allowed CORS origins | No | `[]` |
 | `GAME_TIMEOUT_SECONDS` | Time before inactive games are deleted (seconds) | No | `3600` |
 | `GC_INTERVAL_SECONDS` | Interval between garbage collection runs (seconds) | No | `600` |
