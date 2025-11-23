@@ -4,7 +4,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Default to localhost for development, but can be overridden by env var
+    # Server settings
+    HOST: str
+    PORT: int
+    RELOAD: bool = False
+
+    # CORS settings
     FRONTEND_ORIGINS: list[str] = []
 
     # Garbage collection settings

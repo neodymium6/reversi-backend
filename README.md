@@ -27,7 +27,14 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
 
 ## Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10 or higher (not required if using Docker)
+- Docker (optional, for containerized deployment)
+
+## Docker
+
+Pre-built Docker images are available at [ghcr.io/neodymium6/reversi-backend](https://github.com/neodymium6/reversi-backend/pkgs/container/reversi-backend).
+
+For Docker Compose examples and usage instructions, see the [examples/](examples/) directory.
 
 ## Setup
 
@@ -296,6 +303,9 @@ Games are **not** deleted if they've been accessed within the timeout period, ev
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
+| `HOST` | Server host address | Yes | N/A |
+| `PORT` | Server port | Yes | N/A |
+| `RELOAD` | Enable auto-reload on code changes | No | `false` |
 | `FRONTEND_ORIGINS` | List of allowed CORS origins | No | `[]` |
 | `GAME_TIMEOUT_SECONDS` | Time before inactive games are deleted (seconds) | No | `3600` |
 | `GC_INTERVAL_SECONDS` | Interval between garbage collection runs (seconds) | No | `600` |

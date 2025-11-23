@@ -1,0 +1,18 @@
+# Development example with hot reload
+# Run from project root: docker compose -f examples/docker-compose.dev.yml up
+services:
+  reversi-backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=true
+      - FRONTEND_ORIGINS=["http://localhost:5173"]
+    volumes:
+      - ../reversi_backend:/app/reversi_backend
+      - ../main.py:/app/main.py
+    restart: unless-stopped

@@ -1,0 +1,15 @@
+# Production deployment example using pre-built image from GHCR
+services:
+  reversi-backend:
+    image: ghcr.io/neodymium6/reversi-backend:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=false
+      - FRONTEND_ORIGINS=["https://your-frontend.com"]
+      # Optional: Garbage collection settings
+      # - GAME_TIMEOUT_SECONDS=3600
+      # - GC_INTERVAL_SECONDS=600
+    restart: unless-stopped
