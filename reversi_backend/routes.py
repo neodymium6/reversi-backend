@@ -3,9 +3,12 @@
 from fastapi import APIRouter, HTTPException
 
 from reversi_backend.ai_config import get_all_ai_players
+from reversi_backend.database import calculate_ai_statistics
 from reversi_backend.game_manager import game_manager
 from reversi_backend.models import (
     AIMoveRequest,
+    AIPlayerMetadata,
+    AIStatistics,
     CreateGameRequest,
     GameStateResponse,
     MakeMoveRequest,
@@ -42,17 +45,25 @@ async def get_game_state(game_id: str):
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.get("/api/ai/players")
+@router.get("/api/ai/players", response_model=list[AIPlayerMetadata])
 async def get_ai_players():
-    """Get list of available AI players"""
-    return [
-        {
-            "id": player.id,
-            "name": player.name,
-            "description": player.description,
-        }
-        for player in get_all_ai_players()
-    ]
+    """Get list of available AI players with statistics"""
+    players = []
+    for player in get_all_ai_players():
+        # Calculate statistics for this AI
+        stats_dict = calculate_ai_statistics(player.id)
+        statistics = AIStatistics(**stats_dict)
+
+        # Create player metadata with statistics
+        player_metadata = AIPlayerMetadata(
+            id=player.id,
+            name=player.name,
+            description=player.description,
+            statistics=statistics,
+        )
+        players.append(player_metadata)
+
+    return players
 
 
 @router.post("/api/game/ai-move", response_model=GameStateResponse)
