@@ -11,7 +11,7 @@ from reversi_backend.models import CellState
 client = TestClient(app)
 
 
-def test_completed_game_saved_to_database(setup_test_db):
+def test_completed_game_saved_to_database():
     """Test that completed games are saved to database."""
     # Create a game with AI
     response = client.post(
@@ -25,7 +25,9 @@ def test_completed_game_saved_to_database(setup_test_db):
     # For now, we'll manually check that DB saving logic is called when gameOver=True
 
     # Query database to check if any games were saved
-    db = setup_test_db()
+    from reversi_backend.database import SessionLocal
+
+    db = SessionLocal()
     games = db.query(Game).all()
 
     # Initially no completed games
@@ -36,9 +38,11 @@ def test_completed_game_saved_to_database(setup_test_db):
     db.close()
 
 
-def test_game_record_structure(setup_test_db):
+def test_game_record_structure():
     """Test that Game model can be created and queried."""
-    db = setup_test_db()
+    from reversi_backend.database import SessionLocal
+
+    db = SessionLocal()
 
     # Create a test game record
     game = Game(
@@ -71,9 +75,9 @@ def test_game_record_structure(setup_test_db):
     db.close()
 
 
-def test_calculate_ai_statistics_no_games(setup_test_db):
+def test_calculate_ai_statistics_no_games():
     """Test statistics calculation when AI has no games."""
-    stats = calculate_ai_statistics("piece_depth3", setup_test_db)
+    stats = calculate_ai_statistics("piece_depth3")
 
     assert stats["totalGames"] == 0
     assert stats["wins"] == 0
@@ -85,9 +89,11 @@ def test_calculate_ai_statistics_no_games(setup_test_db):
     assert stats["averageScore"] is None
 
 
-def test_calculate_ai_statistics_with_games(setup_test_db):
+def test_calculate_ai_statistics_with_games():
     """Test statistics calculation with multiple games."""
-    db = setup_test_db()
+    from reversi_backend.database import SessionLocal
+
+    db = SessionLocal()
 
     # Add test games for "piece_depth3" AI
     # Game 1: AI as black, wins
@@ -155,7 +161,7 @@ def test_calculate_ai_statistics_with_games(setup_test_db):
     db.close()
 
     # Calculate statistics
-    stats = calculate_ai_statistics("piece_depth3", setup_test_db)
+    stats = calculate_ai_statistics("piece_depth3")
 
     # Total games: 4
     assert stats["totalGames"] == 4
@@ -182,7 +188,7 @@ def test_calculate_ai_statistics_with_games(setup_test_db):
     assert stats["averageScore"] == 33.75
 
 
-def test_ai_players_endpoint_includes_statistics(setup_test_db):
+def test_ai_players_endpoint_includes_statistics():
     """Test that /api/ai/players endpoint includes statistics."""
     response = client.get("/api/ai/players")
     assert response.status_code == 200

@@ -1,32 +1,49 @@
 """Test configuration and fixtures."""
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import os
 
-from reversi_backend.database import Base
+# Set test database URL BEFORE any imports that might use it
+# Use file-based SQLite for tests to avoid connection issues
+os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+
+import pytest
+
+from reversi_backend.database import Base, engine
 from reversi_backend.game_manager import game_manager
 
 
-@pytest.fixture(scope="function", autouse=True)
-def setup_test_db():
-    """Setup in-memory SQLite database for testing."""
-    # Create in-memory SQLite database for tests
-    engine = create_engine("sqlite:///:memory:")
-    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_db_session():
+    """Setup test database once for the entire test session."""
     # Create all tables
     Base.metadata.create_all(bind=engine)
 
-    # Replace game_manager's db_session_factory with test one
-    original_factory = game_manager.db_session_factory
-    game_manager.db_session_factory = TestSessionLocal
+    yield
 
-    yield TestSessionLocal
+    # Drop all tables after all tests
+    Base.metadata.drop_all(bind=engine)
 
-    # Cleanup: restore original factory
-    game_manager.db_session_factory = original_factory
+    # Remove the test database file
+    import os as os_module
+    if os_module.path.exists("./test.db"):
+        os_module.remove("./test.db")
+
+
+@pytest.fixture(scope="function", autouse=True)
+def cleanup_test_db():
+    """Cleanup test data after each test."""
+    yield
+
+    # Clear game sessions
     game_manager.sessions.clear()
 
-    # Drop all tables
-    Base.metadata.drop_all(bind=engine)
+    # Clear all data from tables (but keep schema)
+    from sqlalchemy import delete
+    from reversi_backend.database import Game, SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.execute(delete(Game))
+        db.commit()
+    finally:
+        db.close()
