@@ -25,6 +25,7 @@ def setup_test_db_session():
 
     # Remove the test database file
     import os as os_module
+
     if os_module.path.exists("./test.db"):
         os_module.remove("./test.db")
 
@@ -39,6 +40,7 @@ def cleanup_test_db():
 
     # Clear all data from tables (but keep schema)
     from sqlalchemy import delete
+
     from reversi_backend.database import Game, SessionLocal
 
     db = SessionLocal()
