@@ -1,5 +1,15 @@
 # Production deployment example using pre-built image from GHCR
 services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=reversi
+      - POSTGRES_PASSWORD=reversi
+      - POSTGRES_DB=reversi
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   reversi-backend:
     image: ghcr.io/neodymium6/reversi-backend:latest
     ports:
@@ -8,8 +18,16 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - RELOAD=false
+      - DATABASE_URL=postgresql://reversi:reversi@db:5432/reversi
       - FRONTEND_ORIGINS=["https://your-frontend.com"]
       # Optional: Garbage collection settings
       # - GAME_TIMEOUT_SECONDS=3600
       # - GC_INTERVAL_SECONDS=600
+      # Optional: Database debugging
+      # - DATABASE_ECHO=true
+    depends_on:
+      - db
     restart: unless-stopped
+
+volumes:
+  postgres_data:
