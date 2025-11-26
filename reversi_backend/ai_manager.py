@@ -1,7 +1,7 @@
 """AI player process management"""
 
 import logging
-import subprocess
+import subprocess  # nosec B404 - controlled commands for AI players
 
 from rust_reversi import Board
 
@@ -64,7 +64,7 @@ class AIPlayerProcess:
         logger.info(f"Starting AI player: {self.config.name} as {color_str}")
         logger.debug(f"Command: {' '.join(command)}")
 
-        self.process = subprocess.Popen(
+        self.process = subprocess.Popen(  # nosec B603 - commands are predefined
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

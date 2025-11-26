@@ -295,6 +295,24 @@ Auto-fix linting issues:
 ruff check --fix .
 ```
 
+### Pre-commit Hooks
+
+Install git hooks:
+```bash
+pre-commit install
+```
+
+Run all hooks manually:
+```bash
+pre-commit run --all-files
+```
+
+Commit messages follow Conventional Commits (Commitizen enforces this during `git commit`). Helpful commands:
+```bash
+pre-commit run commitizen --hook-stage commit-msg --all-files  # check current message
+cz commit  # interactive commit helper
+```
+
 ## Game Logic
 
 The backend uses the [`rust-reversi`](https://github.com/neodymium6/rust_reversi) library, which provides:

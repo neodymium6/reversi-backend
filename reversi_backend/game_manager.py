@@ -35,6 +35,7 @@ def color_to_cell_state(color: Color) -> CellState:
             return CellState.BLACK
         case Color.WHITE:
             return CellState.WHITE
+    raise ValueError(f"Unknown color: {color}")
 
 
 def turn_to_cell_state(turn: Turn) -> CellState:
@@ -44,6 +45,7 @@ def turn_to_cell_state(turn: Turn) -> CellState:
             return CellState.BLACK
         case Turn.WHITE:
             return CellState.WHITE
+    raise ValueError(f"Unknown turn: {turn}")
 
 
 # Helper functions for position conversions

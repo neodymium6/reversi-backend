@@ -12,3 +12,6 @@ wheels/
 
 # Test database
 test.db
+
+# Type checking cache
+.mypy_cache/

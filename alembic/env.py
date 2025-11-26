@@ -2,7 +2,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
-from alembic import context
+from alembic import context  # type: ignore[attr-defined]
 from reversi_backend.config import settings
 from reversi_backend.database import Base
 
