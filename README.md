@@ -295,6 +295,18 @@ Auto-fix linting issues:
 ruff check --fix .
 ```
 
+### Pre-commit Hooks
+
+Install git hooks:
+```bash
+pre-commit install
+```
+
+Run all hooks manually:
+```bash
+pre-commit run --all-files
+```
+
 ## Game Logic
 
 The backend uses the [`rust-reversi`](https://github.com/neodymium6/rust_reversi) library, which provides:
