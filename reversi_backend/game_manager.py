@@ -4,12 +4,14 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from functools import wraps
 
 from rust_reversi import Board, Color, Turn
 
 from reversi_backend.ai_config import get_ai_player
 from reversi_backend.ai_manager import AIPlayerProcess
+from reversi_backend.database import Game, PlayerType, SessionLocal, Winner
 from reversi_backend.models import (
     AIPlayerSettings,
     CellState,
@@ -61,6 +63,11 @@ class GameSession:
 
     board: Board
     last_access: float
+    created_at: datetime
+    black_player_type: PlayerType
+    black_ai_id: str | None
+    white_player_type: PlayerType
+    white_ai_id: str | None
     ai_process: AIPlayerProcess | None = None
 
     @property
@@ -86,8 +93,60 @@ def update_access_time(func):
 class GameManager:
     """Manages game sessions with in-memory storage"""
 
-    def __init__(self):
+    def __init__(self, db_session_factory=SessionLocal):
         self.sessions: dict[str, GameSession] = {}
+        self.db_session_factory = db_session_factory
+
+    def _save_game_to_db(self, game_id: str, session: GameSession) -> None:
+        """Save completed game to database
+
+        Args:
+            game_id: Game UUID
+            session: Game session data
+        """
+        # Determine winner
+        if session.board.is_black_win():
+            winner = Winner.BLACK
+        elif session.board.is_white_win():
+            winner = Winner.WHITE
+        else:
+            winner = Winner.DRAW
+
+        # Count total moves by counting non-empty cells minus initial 4 pieces
+        total_moves = (
+            session.board.black_piece_num() + session.board.white_piece_num() - 4
+        )
+
+        # Create Game record
+        game_record = Game(
+            id=game_id,
+            created_at=session.created_at,
+            finished_at=datetime.now(),
+            black_player_type=session.black_player_type,
+            black_ai_id=session.black_ai_id,
+            white_player_type=session.white_player_type,
+            white_ai_id=session.white_ai_id,
+            winner=winner,
+            black_score=session.board.black_piece_num(),
+            white_score=session.board.white_piece_num(),
+            total_moves=total_moves,
+        )
+
+        # Save to database only when game is over
+        db = self.db_session_factory()
+        try:
+            db.add(game_record)
+            db.commit()
+            logger.info(
+                f"Saved game to database: {game_id}, winner={winner.value}, "
+                f"score={game_record.black_score}-{game_record.white_score}"
+            )
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save game {game_id} to database: {e}")
+            raise
+        finally:
+            db.close()
 
     def create_game(
         self, ai_player: AIPlayerSettings | None = None
@@ -99,8 +158,9 @@ class GameManager:
         """
         game_id = str(uuid.uuid4())
         board = Board()
+        current_time = time.time()
 
-        # Initialize AI player if requested
+        # Determine player types
         ai_process = None
         if ai_player:
             ai_config = get_ai_player(ai_player.aiPlayerId)
@@ -108,16 +168,41 @@ class GameManager:
                 raise ValueError(f"AI player not found: {ai_player.aiPlayerId}")
 
             ai_process = AIPlayerProcess(ai_config, ai_player.aiColor)
+
+            # Set player types based on AI color
+            if ai_player.aiColor == CellState.BLACK:
+                black_player_type = PlayerType.AI
+                black_ai_id = ai_player.aiPlayerId
+                white_player_type = PlayerType.HUMAN
+                white_ai_id = None
+            else:  # WHITE
+                black_player_type = PlayerType.HUMAN
+                black_ai_id = None
+                white_player_type = PlayerType.AI
+                white_ai_id = ai_player.aiPlayerId
+
             logger.info(
                 f"Created new game: {game_id} with AI player: {ai_config.name} "
                 f"as {'BLACK' if ai_player.aiColor == CellState.BLACK else 'WHITE'}"
             )
         else:
+            # Both players are human
+            black_player_type = PlayerType.HUMAN
+            black_ai_id = None
+            white_player_type = PlayerType.HUMAN
+            white_ai_id = None
             logger.info(f"Created new game: {game_id}")
 
         # Create and store game session
         session = GameSession(
-            board=board, last_access=time.time(), ai_process=ai_process
+            board=board,
+            last_access=current_time,
+            created_at=datetime.fromtimestamp(current_time),
+            black_player_type=black_player_type,
+            black_ai_id=black_ai_id,
+            white_player_type=white_player_type,
+            white_ai_id=white_ai_id,
+            ai_process=ai_process,
         )
         self.sessions[game_id] = session
 
@@ -163,7 +248,14 @@ class GameManager:
             f"Move executed: game={game_id}, pos={position}, "
             f"next_player={session.current_player}, passed={passed}"
         )
-        return self._build_response(game_id, session, passed)
+
+        response = self._build_response(game_id, session, passed)
+
+        # Save to database if game is over
+        if response.gameOver:
+            self._save_game_to_db(game_id, session)
+
+        return response
 
     @update_access_time
     def get_game_state(self, game_id: str) -> GameStateResponse:

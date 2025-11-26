@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # Interval in seconds between garbage collection runs (default: 10 minutes)
     GC_INTERVAL_SECONDS: int = 600
 
+    # Database settings
+    DATABASE_URL: str
+    DATABASE_ECHO: bool = False
+
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(env_file=".env")
 
 
