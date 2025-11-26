@@ -21,3 +21,11 @@ repos:
         additional_dependencies:
           - pydantic>=2.8.0
           - sqlalchemy>=2.0.0
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
