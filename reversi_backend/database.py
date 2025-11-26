@@ -1,9 +1,10 @@
 """Database models and configuration for reversi backend."""
 
 import enum
+from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum, Integer, String, create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy import DateTime, Enum, Integer, String, create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from reversi_backend.config import settings
 
@@ -35,25 +36,29 @@ class Game(Base):
     __tablename__ = "games"
 
     # Primary key
-    id = Column(String, primary_key=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True)
 
     # Timestamps
-    created_at = Column(DateTime, nullable=False)
-    finished_at = Column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     # Black player info
-    black_player_type = Column(Enum(PlayerType), nullable=False)
-    black_ai_id = Column(String, nullable=True)  # NULL for HUMAN players
+    black_player_type: Mapped[PlayerType] = mapped_column(
+        Enum(PlayerType), nullable=False
+    )
+    black_ai_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # White player info
-    white_player_type = Column(Enum(PlayerType), nullable=False)
-    white_ai_id = Column(String, nullable=True)  # NULL for HUMAN players
+    white_player_type: Mapped[PlayerType] = mapped_column(
+        Enum(PlayerType), nullable=False
+    )
+    white_ai_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Game result (all NOT NULL for completed games)
-    winner = Column(Enum(Winner), nullable=False)
-    black_score = Column(Integer, nullable=False)
-    white_score = Column(Integer, nullable=False)
-    total_moves = Column(Integer, nullable=False)
+    winner: Mapped[Winner] = mapped_column(Enum(Winner), nullable=False)
+    black_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    white_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_moves: Mapped[int] = mapped_column(Integer, nullable=False)
 
     def __repr__(self) -> str:
         return (
