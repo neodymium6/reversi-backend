@@ -64,3 +64,25 @@ class AIMoveRequest(BaseModel):
     """Request for AI to make a move"""
 
     gameId: str
+
+
+class AIStatistics(BaseModel):
+    """AI player statistics"""
+
+    totalGames: int  # Total number of games played
+    wins: int  # Number of wins
+    losses: int  # Number of losses
+    draws: int  # Number of draws
+    winRate: float | None  # Win rate (wins / totalGames), None if no games
+    asBlackWinRate: float | None  # Win rate as black player, None if no games
+    asWhiteWinRate: float | None  # Win rate as white player, None if no games
+    averageScore: float | None  # Average score across all games, None if no games
+
+
+class AIPlayerMetadata(BaseModel):
+    """AI player metadata with statistics"""
+
+    id: str
+    name: str
+    description: str
+    statistics: AIStatistics

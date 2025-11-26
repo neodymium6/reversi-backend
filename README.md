@@ -12,6 +12,11 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
   - Random move player
   - Alpha-beta search with configurable depth
   - Extensible architecture for custom AI players
+- **AI Statistics** - Track AI performance with detailed statistics
+  - Win/loss/draw counts and win rates
+  - Performance by color (black/white)
+  - Average score tracking
+  - PostgreSQL database for persistent storage
 - Automatic pass handling (when a player has no legal moves)
 - Game over detection with winner calculation
 - CORS support for frontend integration
@@ -21,6 +26,9 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
 
 - **FastAPI** - Modern Python web framework
 - **[rust-reversi](https://github.com/neodymium6/rust_reversi)** - Rust-based Reversi game engine for optimal performance
+- **PostgreSQL** - Database for persistent game statistics
+- **SQLAlchemy** - ORM for database operations
+- **Alembic** - Database migration tool
 - **Pydantic** - Data validation and settings management
 - **Uvicorn** - ASGI server
 - **pytest** - Testing framework
@@ -28,6 +36,7 @@ A high-performance REST API backend for Reversi (Othello) game built with FastAP
 ## Prerequisites
 
 - Python 3.10 or higher (not required if using Docker)
+- PostgreSQL 12 or higher (or use Docker Compose)
 - Docker (optional, for containerized deployment)
 
 ## Docker
@@ -44,19 +53,40 @@ For Docker Compose examples and usage instructions, see the [examples/](examples
 pip install -e .
 ```
 
-### 2. Configure environment variables
+### 2. Set up PostgreSQL database
+
+Using Docker Compose (recommended for development):
+```bash
+docker compose up -d db
+```
+
+Or install PostgreSQL manually and create a database:
+```bash
+createdb reversi
+```
+
+### 3. Configure environment variables
 
 Copy the example environment file:
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and configure allowed frontend origins:
+Edit `.env` and configure the database URL and other settings:
 ```env
+DATABASE_URL=postgresql://reversi:reversi@localhost:5432/reversi
 FRONTEND_ORIGINS=["http://localhost:5173"]
 ```
 
-### 3. Run the development server
+### 4. Run database migrations
+
+```bash
+alembic upgrade head
+```
+
+This creates the necessary database tables for storing game statistics.
+
+### 5. Run the development server
 
 ```bash
 python main.py
@@ -123,21 +153,48 @@ Once the server is running, you can access:
 
 #### Get Available AI Players
 - **GET** `/api/ai/players`
-- **Response**: List of available AI players
+- **Response**: List of available AI players with statistics
   ```json
   [
     {
       "id": "random",
       "name": "Random Player",
-      "description": "Randomly selects legal moves"
+      "description": "Randomly selects legal moves",
+      "statistics": {
+        "totalGames": 150,
+        "wins": 45,
+        "losses": 92,
+        "draws": 13,
+        "winRate": 0.30,
+        "asBlackWinRate": 0.28,
+        "asWhiteWinRate": 0.32,
+        "averageScore": 25.4
+      }
     },
     {
       "id": "piece_depth3",
       "name": "Piece Counter (Depth 3)",
-      "description": "Alpha-beta search with piece counting evaluation (depth 3)"
+      "description": "Alpha-beta search with piece counting evaluation (depth 3)",
+      "statistics": {
+        "totalGames": 200,
+        "wins": 140,
+        "losses": 45,
+        "draws": 15,
+        "winRate": 0.70,
+        "asBlackWinRate": 0.68,
+        "asWhiteWinRate": 0.72,
+        "averageScore": 38.2
+      }
     }
   ]
   ```
+- Each AI player includes comprehensive statistics:
+  - `totalGames`: Total number of completed games
+  - `wins`, `losses`, `draws`: Game outcome counts
+  - `winRate`: Overall win rate (0.0 to 1.0, null if no games)
+  - `asBlackWinRate`: Win rate when playing as black
+  - `asWhiteWinRate`: Win rate when playing as white
+  - `averageScore`: Average final score across all games
 
 #### Make AI Move
 - **POST** `/api/game/ai-move`
@@ -185,16 +242,24 @@ reversi-backend/
 │   ├── models.py        # Pydantic models for request/response
 │   ├── routes.py        # API route handlers
 │   ├── game_manager.py  # Game session management logic
+│   ├── database.py      # Database models and statistics
 │   ├── ai_config.py     # AI player configuration
 │   ├── ai_manager.py    # AI process management
 │   └── ai_players/      # AI player implementations
 │       ├── __init__.py
 │       ├── random_player.py
 │       └── piece_player.py
+├── alembic/             # Database migrations
+│   ├── versions/        # Migration scripts
+│   └── env.py          # Alembic configuration
 ├── tests/
-│   ├── test_integration.py     # Integration tests
-│   └── test_ai_integration.py  # AI integration tests
+│   ├── conftest.py                   # Test configuration
+│   ├── test_integration.py           # Integration tests
+│   ├── test_ai_integration.py        # AI integration tests
+│   ├── test_database_integration.py  # Database tests
+│   └── test_garbage_collection.py    # GC tests
 ├── main.py              # Application entry point
+├── alembic.ini          # Alembic configuration file
 ├── pyproject.toml       # Project metadata and dependencies
 ├── .env.example         # Example environment variables
 └── README.md
@@ -307,6 +372,8 @@ Games are **not** deleted if they've been accessed within the timeout period, ev
 | `PORT` | Server port | Yes | N/A |
 | `RELOAD` | Enable auto-reload on code changes | No | `false` |
 | `FRONTEND_ORIGINS` | List of allowed CORS origins | No | `[]` |
+| `DATABASE_URL` | PostgreSQL connection URL | Yes | N/A |
+| `DATABASE_ECHO` | Enable SQLAlchemy SQL logging | No | `false` |
 | `GAME_TIMEOUT_SECONDS` | Time before inactive games are deleted (seconds) | No | `3600` |
 | `GC_INTERVAL_SECONDS` | Interval between garbage collection runs (seconds) | No | `600` |
 
@@ -314,15 +381,23 @@ Games are **not** deleted if they've been accessed within the timeout period, ev
 
 For production deployment:
 
-1. Set `reload=False` in `main.py` or use a production ASGI server
-2. Configure proper CORS origins in `.env`
-3. Consider using a process manager like systemd or supervisord
-4. Set up reverse proxy (nginx/caddy) for SSL termination
+1. Set up PostgreSQL database and configure `DATABASE_URL`
+2. Run database migrations: `alembic upgrade head`
+3. Set `reload=False` in `main.py` or use a production ASGI server
+4. Configure proper CORS origins in `.env`
+5. Consider using a process manager like systemd or supervisord
+6. Set up reverse proxy (nginx/caddy) for SSL termination
 
-Example with uvicorn:
+Example deployment commands:
 ```bash
+# Run migrations
+alembic upgrade head
+
+# Start server with multiple workers
 uvicorn reversi_backend.app:app --host 0.0.0.0 --port 8000 --workers 4
 ```
+
+**Important**: Always run `alembic upgrade head` before starting the application to ensure the database schema is up to date.
 
 ## Integration with Frontend
 

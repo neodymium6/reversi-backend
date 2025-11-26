@@ -1,6 +1,18 @@
 # Development example with hot reload
 # Run from project root: docker compose -f examples/docker-compose.dev.yml up
 services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=reversi
+      - POSTGRES_PASSWORD=reversi
+      - POSTGRES_DB=reversi
+    ports:
+      - "5432:5432"  # Expose port for local development tools
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   reversi-backend:
     build:
       context: ..
@@ -11,8 +23,14 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - RELOAD=true
+      - DATABASE_URL=postgresql://reversi:reversi@db:5432/reversi
       - FRONTEND_ORIGINS=["http://localhost:5173"]
     volumes:
       - ../reversi_backend:/app/reversi_backend
       - ../main.py:/app/main.py
+    depends_on:
+      - db
     restart: unless-stopped
+
+volumes:
+  postgres_data:
